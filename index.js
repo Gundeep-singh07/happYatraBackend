@@ -6,6 +6,8 @@ require("dotenv").config();
 // Import routes
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
+const adminNotificationRoutes = require("./routes/AdminNotification.routes");
+const userNotificationRoutes = require("./routes/UserNotification.routes");
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -13,7 +15,12 @@ const PORT = process.env.PORT || 80;
 // Enhanced CORS configuration
 app.use(
   cors({
-    origin: ["http://localhost:8081", "http://127.0.0.1:8080"],
+    origin: [
+      "http://localhost:8081",
+      "http://127.0.0.1:8080",
+      "http://localhost:8080", // React dev server
+      "http://localhost:5173", // Vite dev server
+    ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
@@ -46,6 +53,8 @@ mongoose
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/admin/notifications", adminNotificationRoutes);
+app.use("/api/notifications", userNotificationRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {
