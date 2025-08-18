@@ -285,9 +285,6 @@ app.use((err, req, res, next) => {
 
 // 404 handler for API routes
 app.use("/api/*", (req, res) => {
-  console.warn(
-    `❓ 404 - API route not found: ${req.method} ${req.originalUrl}`
-  );
   res.status(404).json({
     success: false,
     message: `API route not found: ${req.method} ${req.originalUrl}`,
