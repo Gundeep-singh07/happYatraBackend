@@ -18,11 +18,6 @@ router.use(tempAuthMiddleware);
 
 // Add request logging
 router.use((req, res, next) => {
-  console.log(
-    `[User Routes] ${req.method} ${
-      req.originalUrl
-    } - ${new Date().toISOString()}`
-  );
   next();
 });
 

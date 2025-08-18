@@ -8,6 +8,7 @@ const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const adminNotificationRoutes = require("./routes/AdminNotification.routes");
 const userNotificationRoutes = require("./routes/UserNotification.routes");
+const weatherRoutes = require("./routes/weatherRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -189,47 +190,20 @@ app.get("/api/health", async (req, res) => {
 console.log("🔗 Setting up API routes...");
 
 // Mount routes with logging
-app.use(
-  "/api/auth",
-  (req, res, next) => {
-    console.log(`[AUTH] ${req.method} ${req.originalUrl}`);
-    next();
-  },
-  authRoutes
-);
+app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/admin/notifications", adminNotificationRoutes);
+app.use("/api/notifications", userNotificationRoutes);
 
-app.use(
-  "/api/user",
-  (req, res, next) => {
-    console.log(`[USER] ${req.method} ${req.originalUrl}`);
-    next();
-  },
-  userRoutes
-);
-
-app.use(
-  "/api/admin/notifications",
-  (req, res, next) => {
-    console.log(`[ADMIN-NOTIFICATIONS] ${req.method} ${req.originalUrl}`);
-    next();
-  },
-  adminNotificationRoutes
-);
-
-app.use(
-  "/api/notifications",
-  (req, res, next) => {
-    console.log(`[USER-NOTIFICATIONS] ${req.method} ${req.originalUrl}`);
-    next();
-  },
-  userNotificationRoutes
-);
+// ✅ FIX 1: ADD THIS LINE TO ACTUALLY USE THE WEATHER ROUTE
+app.use("/api/weather", weatherRoutes);
 
 console.log("✅ API routes configured:");
 console.log("   📡 /api/auth");
 console.log("   👤 /api/user");
 console.log("   🔧 /api/admin/notifications");
 console.log("   📢 /api/notifications");
+console.log("   ☁️ /api/weather");
 
 // Test endpoints for debugging
 app.get("/api/test", (req, res) => {
@@ -261,7 +235,9 @@ app.get("/api/debug/env", (req, res) => {
   });
 });
 
-// Global error handling middleware
+// ✅ FIX 2: MOVE THE ERROR AND 404 HANDLERS TO THE END
+
+// Global error handling middleware (MUST BE AFTER ROUTES)
 app.use((err, req, res, next) => {
   console.error("🚨 Global Error Handler:");
   console.error("📍 URL:", req.originalUrl);
@@ -283,7 +259,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler for API routes
+// 404 handler for API routes (MUST BE AFTER ROUTES AND BEFORE GENERAL 404)
 app.use("/api/*", (req, res) => {
   res.status(404).json({
     success: false,
@@ -294,11 +270,12 @@ app.use("/api/*", (req, res) => {
       "POST /api/auth/login",
       "GET /api/notifications",
       "GET /api/admin/notifications",
+      "GET /api/weather", // Added for clarity
     ],
   });
 });
 
-// General 404 handler
+// General 404 handler (MUST BE LAST)
 app.use((req, res) => {
   console.warn(`❓ 404 - Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
@@ -334,6 +311,7 @@ const server = app.listen(PORT, () => {
   console.log("   👤 User: /api/user/*");
   console.log("   🔧 Admin Notifications: /api/admin/notifications/*");
   console.log("   📢 User Notifications: /api/notifications/*");
+  console.log("   ☁️ Weather: /api/weather/*"); // Added for clarity
   console.log("===============================================\n");
 });
 
