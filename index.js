@@ -10,6 +10,10 @@ const adminNotificationRoutes = require("./routes/AdminNotification.routes");
 const userNotificationRoutes = require("./routes/UserNotification.routes");
 const weatherRoutes = require("./routes/weatherRoutes");
 
+const busSystemRoutes = require("./routes/busSystemRoutes");
+const { startSimulation } = require("./controllers/busSystemController");
+const tripPlannerRoutes = require("./routes/tripPlannerRoutes");
+
 const app = express();
 const PORT = process.env.PORT || 80;
 
@@ -198,12 +202,17 @@ app.use("/api/notifications", userNotificationRoutes);
 // ✅ FIX 1: ADD THIS LINE TO ACTUALLY USE THE WEATHER ROUTE
 app.use("/api/weather", weatherRoutes);
 
+app.use("/api/bus-system", busSystemRoutes);
+app.use("/api/trip-planner", tripPlannerRoutes); // Add this lin
+
 console.log("✅ API routes configured:");
 console.log("   📡 /api/auth");
 console.log("   👤 /api/user");
 console.log("   🔧 /api/admin/notifications");
 console.log("   📢 /api/notifications");
 console.log("   ☁️ /api/weather");
+console.log("   🚌 /api/bus-system"); // Add this to your logs
+console.log("   🗺️ /api/trip-planner"); // Optional: add to logs
 
 // Test endpoints for debugging
 app.get("/api/test", (req, res) => {
