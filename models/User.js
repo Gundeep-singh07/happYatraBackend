@@ -29,6 +29,7 @@ const userSchema = new mongoose.Schema(
       zipCode: String,
       country: String,
     },
+
     // Location tracking fields
     location: {
       latitude: {
@@ -51,6 +52,7 @@ const userSchema = new mongoose.Schema(
         default: Date.now,
       },
     },
+
     locationHistory: [
       {
         latitude: {
@@ -76,6 +78,7 @@ const userSchema = new mongoose.Schema(
         },
       },
     ],
+
     locationPreferences: {
       shareLocation: {
         type: Boolean,
@@ -96,6 +99,7 @@ const userSchema = new mongoose.Schema(
         max: 1000,
       },
     },
+
     // User preferences and settings
     preferences: {
       theme: {
@@ -125,7 +129,16 @@ const userSchema = new mongoose.Schema(
         preferredModes: [
           {
             type: String,
-            enum: ["bus", "metro", "taxi", "walking", "cycling", "carpooling"],
+            enum: [
+              "bus",
+              "metro",
+              "taxi",
+              "walking",
+              "cycling",
+              "carpooling",
+              "train",
+              "auto",
+            ],
           },
         ],
         defaultRadius: {
@@ -134,6 +147,7 @@ const userSchema = new mongoose.Schema(
         },
       },
     },
+
     // User activity tracking
     stats: {
       totalTrips: {
@@ -157,6 +171,7 @@ const userSchema = new mongoose.Schema(
         default: Date.now,
       },
     },
+
     // Account status
     isVerified: {
       type: Boolean,
@@ -183,7 +198,7 @@ userSchema.index({ "location.latitude": 1, "location.longitude": 1 });
 userSchema.index({ isActive: 1, role: 1 });
 userSchema.index({ "stats.lastActive": -1 });
 
-// Pre-save middleware to update lastActive
+// Pre-save middleware to update lastActive when location changes
 userSchema.pre("save", function (next) {
   if (this.isModified("location")) {
     this.stats.lastActive = new Date();
@@ -194,7 +209,6 @@ userSchema.pre("save", function (next) {
 // Virtual for full address
 userSchema.virtual("fullAddress").get(function () {
   if (!this.address) return null;
-
   const parts = [
     this.address.street,
     this.address.city,
@@ -202,14 +216,12 @@ userSchema.virtual("fullAddress").get(function () {
     this.address.zipCode,
     this.address.country,
   ].filter(Boolean);
-
   return parts.length > 0 ? parts.join(", ") : null;
 });
 
 // Method to check if location is recent (within last hour)
 userSchema.methods.hasRecentLocation = function () {
   if (!this.location || !this.location.lastUpdated) return false;
-
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   return this.location.lastUpdated > oneHourAgo;
 };
@@ -223,14 +235,12 @@ userSchema.methods.getDistanceFrom = function (latitude, longitude) {
   const R = 6371; // Radius of the Earth in km
   const dLat = (latitude - this.location.latitude) * (Math.PI / 180);
   const dLon = (longitude - this.location.longitude) * (Math.PI / 180);
-
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(this.location.latitude * (Math.PI / 180)) *
       Math.cos(latitude * (Math.PI / 180)) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c; // Distance in km
 };

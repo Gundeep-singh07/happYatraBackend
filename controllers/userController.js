@@ -34,7 +34,6 @@ const updateProfile = async (req, res) => {
     const { fullName, phone, address, preferences } = req.body;
     const updateData = {};
 
-    // Validate and update basic info
     if (fullName) {
       if (fullName.trim().length < 2) {
         return res.status(400).json({
@@ -46,7 +45,6 @@ const updateProfile = async (req, res) => {
     }
 
     if (phone) {
-      // Basic phone validation
       const phoneRegex = /^[+]?[\d\s\-\(\)]{10,15}$/;
       if (!phoneRegex.test(phone)) {
         return res.status(400).json({
@@ -102,7 +100,7 @@ const updateLocation = async (req, res) => {
       });
     }
 
-    // Validate latitude and longitude ranges
+    // Validate ranges
     if (
       latitude < -90 ||
       latitude > 90 ||
@@ -111,16 +109,14 @@ const updateLocation = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message:
-          "Invalid latitude or longitude values. Latitude must be between -90 and 90, longitude between -180 and 180",
+        message: "Invalid latitude or longitude values",
       });
     }
 
-    // Validate accuracy if provided
     if (accuracy && (accuracy < 0 || accuracy > 100000)) {
       return res.status(400).json({
         success: false,
-        message: "Accuracy must be a positive number less than 100000 meters",
+        message: "Accuracy must be between 0 and 100000 meters",
       });
     }
 
@@ -140,9 +136,9 @@ const updateLocation = async (req, res) => {
       lastUpdated: new Date(),
     };
 
-    // Check if this is a significant location change (more than 10 meters)
+    // Check for significant location change
     let isSignificantChange = true;
-    if (user.location && user.location.latitude && user.location.longitude) {
+    if (user.location?.latitude && user.location?.longitude) {
       const distance = user.getDistanceFrom(
         locationData.latitude,
         locationData.longitude
@@ -153,7 +149,7 @@ const updateLocation = async (req, res) => {
     // Update current location
     user.location = locationData;
 
-    // Add to location history only if it's a significant change
+    // Add to location history if significant change
     if (isSignificantChange) {
       user.locationHistory.unshift({
         latitude: locationData.latitude,
@@ -163,15 +159,13 @@ const updateLocation = async (req, res) => {
         timestamp: new Date(),
       });
 
-      // Keep only the last 50 location entries
+      // Keep only last 50 entries
       if (user.locationHistory.length > 50) {
         user.locationHistory = user.locationHistory.slice(0, 50);
       }
     }
 
-    // Update last active timestamp
     user.stats.lastActive = new Date();
-
     await user.save();
 
     res.json({
@@ -206,12 +200,10 @@ const updateLocationPreferences = async (req, res) => {
       });
     }
 
-    // Initialize locationPreferences if it doesn't exist
     if (!user.locationPreferences) {
       user.locationPreferences = {};
     }
 
-    // Update location preferences
     if (shareLocation !== undefined) {
       user.locationPreferences.shareLocation = Boolean(shareLocation);
     }
@@ -252,10 +244,8 @@ const updateLocationPreferences = async (req, res) => {
 const getLocationHistory = async (req, res) => {
   try {
     const { limit = 10, page = 1 } = req.query;
-
-    // Validate pagination parameters
     const pageNum = Math.max(1, parseInt(page));
-    const limitNum = Math.max(1, Math.min(100, parseInt(limit))); // Max 100 items per page
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit)));
 
     const user = await User.findById(req.user.userId).select("locationHistory");
     if (!user) {
@@ -291,18 +281,13 @@ const getLocationHistory = async (req, res) => {
   }
 };
 
-// Get Nearby Users (for carpooling, etc.)
+// Get Nearby Users
 const getNearbyUsers = async (req, res) => {
   try {
     const { radius = 10, limit = 20 } = req.query;
 
     const user = await User.findById(req.user.userId);
-    if (
-      !user ||
-      !user.location ||
-      !user.location.latitude ||
-      !user.location.longitude
-    ) {
+    if (!user?.location?.latitude || !user?.location?.longitude) {
       return res.status(400).json({
         success: false,
         message:
@@ -310,8 +295,8 @@ const getNearbyUsers = async (req, res) => {
       });
     }
 
-    const radiusNum = Math.min(100, Math.max(1, parseFloat(radius))); // Between 1-100 km
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit))); // Between 1-50 users
+    const radiusNum = Math.min(100, Math.max(1, parseFloat(radius)));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
 
     const nearbyUsers = await User.findUsersWithinRadius(
       user.location.latitude,
@@ -321,7 +306,6 @@ const getNearbyUsers = async (req, res) => {
       .select("fullName profilePicture.url location stats.totalTrips createdAt")
       .limit(limitNum);
 
-    // Filter out the current user and calculate distances
     const usersWithDistance = nearbyUsers
       .filter((nearbyUser) => nearbyUser._id.toString() !== user._id.toString())
       .map((nearbyUser) => {
@@ -335,7 +319,6 @@ const getNearbyUsers = async (req, res) => {
           fullName: nearbyUser.fullName,
           profilePicture: nearbyUser.profilePicture,
           location: {
-            // Only share approximate location for privacy
             address: nearbyUser.location.address,
             latitude: parseFloat(nearbyUser.location.latitude.toFixed(4)),
             longitude: parseFloat(nearbyUser.location.longitude.toFixed(4)),
@@ -368,7 +351,7 @@ const getNearbyUsers = async (req, res) => {
   }
 };
 
-// Update User Stats (for trip tracking)
+// Update User Stats
 const updateStats = async (req, res) => {
   try {
     const { tripDistance, transportMode, co2Saved, moneySaved } = req.body;
@@ -388,7 +371,6 @@ const updateStats = async (req, res) => {
       });
     }
 
-    // Initialize stats if it doesn't exist
     if (!user.stats) {
       user.stats = {
         totalTrips: 0,
@@ -399,41 +381,28 @@ const updateStats = async (req, res) => {
       };
     }
 
-    // Update stats
     user.stats.totalTrips += 1;
     user.stats.totalDistance += parseFloat(tripDistance);
-
     if (co2Saved && co2Saved > 0) {
       user.stats.co2Saved += parseFloat(co2Saved);
     }
-
     if (moneySaved && moneySaved > 0) {
       user.stats.moneySaved += parseFloat(moneySaved);
     }
-
     user.stats.lastActive = new Date();
 
-    // Initialize preferences if they don't exist
     if (!user.preferences) {
-      user.preferences = {
-        transportation: {
-          preferredModes: [],
-        },
-      };
+      user.preferences = { transportation: { preferredModes: [] } };
     }
     if (!user.preferences.transportation) {
-      user.preferences.transportation = {
-        preferredModes: [],
-      };
+      user.preferences.transportation = { preferredModes: [] };
     }
 
-    // Add to preferred transport modes if not already there
-    if (transportMode && user.preferences.transportation.preferredModes) {
-      if (
-        !user.preferences.transportation.preferredModes.includes(transportMode)
-      ) {
-        user.preferences.transportation.preferredModes.push(transportMode);
-      }
+    if (
+      transportMode &&
+      !user.preferences.transportation.preferredModes.includes(transportMode)
+    ) {
+      user.preferences.transportation.preferredModes.push(transportMode);
     }
 
     await user.save();
@@ -463,7 +432,6 @@ const uploadProfilePicture = async (req, res) => {
       });
     }
 
-    // Validate file size (5MB limit)
     if (req.file.size > 5 * 1024 * 1024) {
       return res.status(400).json({
         success: false,
@@ -480,7 +448,7 @@ const uploadProfilePicture = async (req, res) => {
     }
 
     // Delete old image if exists
-    if (user.profilePicture && user.profilePicture.publicId) {
+    if (user.profilePicture?.publicId) {
       try {
         await cloudinary.uploader.destroy(user.profilePicture.publicId);
       } catch (deleteError) {
@@ -501,11 +469,8 @@ const uploadProfilePicture = async (req, res) => {
             public_id: `user_${user._id}_${Date.now()}`,
           },
           (error, result) => {
-            if (error) {
-              reject(error);
-            } else {
-              resolve(result);
-            }
+            if (error) reject(error);
+            else resolve(result);
           }
         )
         .end(req.file.buffer);
@@ -513,7 +478,6 @@ const uploadProfilePicture = async (req, res) => {
 
     const result = await uploadPromise;
 
-    // Update user profile picture
     user.profilePicture = {
       url: result.secure_url,
       publicId: result.public_id,
@@ -558,7 +522,6 @@ const deleteAccount = async (req, res) => {
 
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password);
-
     if (!isValidPassword) {
       return res.status(400).json({
         success: false,
@@ -567,7 +530,7 @@ const deleteAccount = async (req, res) => {
     }
 
     // Delete profile picture from Cloudinary if exists
-    if (user.profilePicture && user.profilePicture.publicId) {
+    if (user.profilePicture?.publicId) {
       try {
         await cloudinary.uploader.destroy(user.profilePicture.publicId);
       } catch (deleteError) {
