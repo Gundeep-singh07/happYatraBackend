@@ -11,6 +11,18 @@ const {
   uploadProfilePicture,
   deleteAccount,
 } = require("../controllers/userController");
+
+// ++ IMPORT THE NEW FRIEND CONTROLLER ++
+const {
+  getConnections,
+  searchUsers,
+  sendFriendRequest,
+  acceptFriendRequest,
+  declineFriendRequest,
+  removeFriend,
+} = require("../controllers/friendController");
+// -- END OF IMPORT --
+
 const authMiddleware = require("../middleware/auth");
 
 const router = express.Router();
@@ -116,6 +128,15 @@ router.put("/stats", updateStats);
 // Account Management Routes
 // DELETE /api/user/account - Delete user account
 router.delete("/account", deleteAccount);
+
+// ++ NEW: Friend Management Routes ++
+router.get("/friends/connections", getConnections);
+router.get("/friends/search", searchUsers);
+router.post("/friends/request/:userId", sendFriendRequest);
+router.post("/friends/accept/:userId", acceptFriendRequest);
+router.delete("/friends/decline/:userId", declineFriendRequest);
+router.delete("/friends/remove/:userId", removeFriend);
+// -- END OF NEW ROUTES --
 
 // Health check for user routes
 router.get("/health", (req, res) => {

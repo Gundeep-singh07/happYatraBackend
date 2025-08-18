@@ -1,6 +1,7 @@
 // models/User.js
 
 const mongoose = require("mongoose");
+const Schema = mongoose.Schema; // Import Schema for referencing
 
 const userSchema = new mongoose.Schema(
   {
@@ -24,7 +25,6 @@ const userSchema = new mongoose.Schema(
       publicId: String,
     },
     phone: String,
-    // ++ ADDED FIELDS FOR OTP VERIFICATION ++
     phoneVerified: {
       type: Boolean,
       default: false,
@@ -35,7 +35,6 @@ const userSchema = new mongoose.Schema(
     otpExpires: {
       type: Date,
     },
-    // -- END OF ADDED FIELDS --
     address: {
       street: String,
       city: String,
@@ -43,8 +42,6 @@ const userSchema = new mongoose.Schema(
       zipCode: String,
       country: String,
     },
-
-    // Location tracking fields
     location: {
       latitude: {
         type: Number,
@@ -66,7 +63,6 @@ const userSchema = new mongoose.Schema(
         default: Date.now,
       },
     },
-
     locationHistory: [
       {
         latitude: {
@@ -92,7 +88,6 @@ const userSchema = new mongoose.Schema(
         },
       },
     ],
-
     locationPreferences: {
       shareLocation: {
         type: Boolean,
@@ -113,8 +108,6 @@ const userSchema = new mongoose.Schema(
         max: 1000,
       },
     },
-
-    // User preferences and settings
     preferences: {
       theme: {
         type: String,
@@ -161,8 +154,6 @@ const userSchema = new mongoose.Schema(
         },
       },
     },
-
-    // User activity tracking
     stats: {
       totalTrips: {
         type: Number,
@@ -185,8 +176,6 @@ const userSchema = new mongoose.Schema(
         default: Date.now,
       },
     },
-
-    // Account status
     isVerified: {
       type: Boolean,
       default: false,
@@ -200,6 +189,27 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin", "moderator"],
       default: "user",
     },
+
+    // ++ NEW: Fields for the friend system ++
+    friends: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User", // This links to other User documents
+      },
+    ],
+    friendRequestsSent: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    friendRequestsReceived: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    // -- END OF NEW FIELDS --
   },
   {
     timestamps: true,
