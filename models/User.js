@@ -1,3 +1,5 @@
+// models/User.js
+
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
@@ -22,6 +24,18 @@ const userSchema = new mongoose.Schema(
       publicId: String,
     },
     phone: String,
+    // ++ ADDED FIELDS FOR OTP VERIFICATION ++
+    phoneVerified: {
+      type: Boolean,
+      default: false,
+    },
+    otp: {
+      type: String,
+    },
+    otpExpires: {
+      type: Date,
+    },
+    // -- END OF ADDED FIELDS --
     address: {
       street: String,
       city: String,
