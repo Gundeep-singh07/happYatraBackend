@@ -3,8 +3,19 @@
 const User = require("../models/User");
 const mongoose = require("mongoose");
 
+// --- HELPER FUNCTION: VALIDATE MONGOOSE ID ---
+const isValidObjectId = (id, res) => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res
+      .status(400)
+      .json({ success: false, message: "Invalid user ID format." });
+    return false;
+  }
+  return true;
+};
+
 /**
- * @desc    Get user's friends, sent requests, received requests, and suggestions
+ * @desc    Get user's connections (friends, requests, suggestions)
  * @route   GET /api/user/friends/connections
  * @access  Private
  */
@@ -22,50 +33,43 @@ const getConnections = async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    // ROBUST DATA HANDLING
-    // Filter out any null values that can occur if a referenced user was deleted.
-    const validFriends = user.friends
-      ? user.friends.filter((f) => f !== null)
+    const validFriends = user.friends ? user.friends.filter(Boolean) : [];
+    const validSent = user.friendRequestsSent
+      ? user.friendRequestsSent.filter(Boolean)
       : [];
-    const validSentRequests = user.friendRequestsSent
-      ? user.friendRequestsSent.filter((r) => r !== null)
-      : [];
-    const validReceivedRequests = user.friendRequestsReceived
-      ? user.friendRequestsReceived.filter((r) => r !== null)
+    const validReceived = user.friendRequestsReceived
+      ? user.friendRequestsReceived.filter(Boolean)
       : [];
 
-    // Suggestion logic: Find users who are not friends and have no pending requests between them
     const existingConnections = [
       ...validFriends.map((f) => f._id),
-      ...validSentRequests.map((r) => r._id),
-      ...validReceivedRequests.map((r) => r._id),
-      // ++ THE FIX IS HERE: Added the 'new' keyword ++
-      new mongoose.Types.ObjectId(req.user.userId), // Exclude self
+      ...validSent.map((r) => r._id),
+      ...validReceived.map((r) => r._id),
+      new mongoose.Types.ObjectId(req.user.userId),
     ];
 
     const suggestions = await User.find({ _id: { $nin: existingConnections } })
       .select("fullName profilePicture")
-      .limit(10);
+      .limit(10)
+      .lean();
 
     res.json({
       success: true,
       data: {
         friends: validFriends,
-        sentRequests: validSentRequests,
-        receivedRequests: validReceivedRequests,
+        sentRequests: validSent,
+        receivedRequests: validReceived,
         suggestions,
       },
     });
   } catch (error) {
     console.error("Get Connections Error:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Server Error", error: error.message });
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 
 /**
- * @desc    Search for users by name or email
+ * @desc    Search for users
  * @route   GET /api/user/friends/search?q=...
  * @access  Private
  */
@@ -75,18 +79,16 @@ const searchUsers = async (req, res) => {
     if (!q) {
       return res
         .status(400)
-        .json({ success: false, message: "Search query is required" });
+        .json({ success: false, message: "Search query required." });
     }
-
     const searchRegex = new RegExp(q, "i");
-
     const users = await User.find({
       _id: { $ne: req.user.userId },
       $or: [{ fullName: searchRegex }, { email: searchRegex }],
     })
       .select("fullName profilePicture")
-      .limit(20);
-
+      .limit(20)
+      .lean();
     res.json({ success: true, data: { users } });
   } catch (error) {
     console.error("Search Users Error:", error);
@@ -95,45 +97,35 @@ const searchUsers = async (req, res) => {
 };
 
 /**
- * @desc    Send a friend request to a user
+ * @desc    Send a friend request
  * @route   POST /api/user/friends/request/:userId
  * @access  Private
  */
 const sendFriendRequest = async (req, res) => {
+  // In this context:
+  // 'sender' is the currently logged-in user initiating the request.
+  // 'recipient' is the user whose ID is in the URL parameter.
+  const senderId = req.user.userId;
+  const { userId: recipientId } = req.params;
+
+  if (!isValidObjectId(recipientId, res)) return;
+  if (senderId === recipientId) {
+    return res
+      .status(400)
+      .json({ success: false, message: "You cannot add yourself." });
+  }
+
   try {
-    const senderId = req.user.userId;
-    const { userId: recipientId } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(recipientId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid recipient user ID format." });
-    }
-
-    if (senderId === recipientId) {
-      return res.status(400).json({
-        success: false,
-        message: "You cannot add yourself as a friend.",
-      });
-    }
-
     const [sender, recipient] = await Promise.all([
       User.findById(senderId),
       User.findById(recipientId),
     ]);
 
-    if (!recipient) {
+    if (!recipient || !sender) {
       return res
         .status(404)
-        .json({ success: false, message: "Recipient user not found." });
+        .json({ success: false, message: "User not found." });
     }
-
-    if (!sender) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Sender (current user) not found." });
-    }
-
     if (sender.friends.includes(recipientId)) {
       return res
         .status(400)
@@ -142,17 +134,24 @@ const sendFriendRequest = async (req, res) => {
     if (sender.friendRequestsSent.includes(recipientId)) {
       return res
         .status(400)
-        .json({ success: false, message: "Friend request already sent." });
-    }
-    if (sender.friendRequestsReceived.includes(recipientId)) {
-      sender.friendRequestsReceived.pull(recipientId);
-      sender.friends.addToSet(recipientId);
-      recipient.friendRequestsSent.pull(senderId);
-      recipient.friends.addToSet(senderId);
-      await Promise.all([sender.save(), recipient.save()]);
-      return res.json({ success: true, message: "Friend request accepted." });
+        .json({ success: false, message: "Request already sent." });
     }
 
+    // *** STRONG LOGIC REFACTOR ***
+    // If the sender has already received a request from the recipient,
+    // don't re-implement the logic. Instead, treat this action as ACCEPTING
+    // the existing request. We call the master `acceptFriendRequest` function.
+    if (sender.friendRequestsReceived.includes(recipientId)) {
+      // We must construct a new `req` object for `acceptFriendRequest` because
+      // the roles are swapped. Here, the current user (sender) is ACCEPTING.
+      const virtualReq = {
+        user: { userId: senderId }, // The user accepting is the current sender
+        params: { userId: recipientId }, // The user who sent the original request is the recipient
+      };
+      return acceptFriendRequest(virtualReq, res);
+    }
+
+    // Standard flow: Add request to the respective arrays
     sender.friendRequestsSent.addToSet(recipientId);
     recipient.friendRequestsReceived.addToSet(senderId);
     await Promise.all([sender.save(), recipient.save()]);
@@ -160,9 +159,7 @@ const sendFriendRequest = async (req, res) => {
     res.status(200).json({ success: true, message: "Friend request sent." });
   } catch (error) {
     console.error("Send Friend Request Error:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Server Error", error: error.message });
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 
@@ -172,98 +169,86 @@ const sendFriendRequest = async (req, res) => {
  * @access  Private
  */
 const acceptFriendRequest = async (req, res) => {
+  // In this context:
+  // 'recipient' is the currently logged-in user who is ACCEPTING the request.
+  // 'sender' is the user who INITIATED the request (their ID is in the URL).
+  const recipientId = req.user.userId;
+  const { userId: senderId } = req.params;
+
+  if (!isValidObjectId(senderId, res)) return;
+
   try {
-    const recipientId = req.user.userId;
-    const { userId: senderId } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(senderId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid sender user ID format." });
-    }
-
     const [recipient, sender] = await Promise.all([
       User.findById(recipientId),
       User.findById(senderId),
     ]);
 
-    if (!sender) {
+    if (!sender || !recipient) {
       return res
         .status(404)
-        .json({ success: false, message: "Sending user not found." });
-    }
-    if (!recipient) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Recipient (current user) not found.",
-        });
+        .json({ success: false, message: "User not found." });
     }
     if (!recipient.friendRequestsReceived.includes(senderId)) {
-      return res.status(400).json({
-        success: false,
-        message: "No friend request found from this user.",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "No request found." });
     }
 
+    // --- THIS IS THE SINGLE SOURCE OF TRUTH FOR CREATING A FRIENDSHIP ---
+
+    // 1. Recipient updates their lists
     recipient.friendRequestsReceived.pull(senderId);
     recipient.friends.addToSet(senderId);
+
+    // 2. Sender updates their lists
     sender.friendRequestsSent.pull(recipientId);
-    sender.friends.addToSet(senderId);
+
+    // *** THE CRITICAL FIX IS HERE ***
+    // The SENDER adds the RECIPIENT to their friends list.
+    sender.friends.addToSet(recipientId); // NOT senderId
+
     await Promise.all([recipient.save(), sender.save()]);
 
     res.json({ success: true, message: "Friend request accepted." });
   } catch (error) {
     console.error("Accept Friend Request Error:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Server Error", error: error.message });
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 
 /**
- * @desc    Decline a received request or cancel a sent request
+ * @desc    Decline a request or Cancel a sent request
  * @route   DELETE /api/user/friends/decline/:userId
  * @access  Private
  */
 const declineFriendRequest = async (req, res) => {
+  const currentUserId = req.user.userId;
+  const { userId: otherUserId } = req.params;
+
+  if (!isValidObjectId(otherUserId, res)) return;
+
   try {
-    const currentUserId = req.user.userId;
-    const { userId: otherUserId } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(otherUserId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid user ID format." });
-    }
-
     const [currentUser, otherUser] = await Promise.all([
       User.findById(currentUserId),
       User.findById(otherUserId),
     ]);
-
     if (!otherUser || !currentUser) {
       return res
         .status(404)
         .json({ success: false, message: "User not found." });
     }
 
+    // Clean up from all possible states
     currentUser.friendRequestsReceived.pull(otherUserId);
     currentUser.friendRequestsSent.pull(otherUserId);
     otherUser.friendRequestsSent.pull(currentUserId);
     otherUser.friendRequestsReceived.pull(currentUserId);
     await Promise.all([currentUser.save(), otherUser.save()]);
 
-    res.json({
-      success: true,
-      message: "Friend request declined or cancelled.",
-    });
+    res.json({ success: true, message: "Request declined or cancelled." });
   } catch (error) {
-    console.error("Decline Friend Request Error:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Server Error", error: error.message });
+    console.error("Decline/Cancel Request Error:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 
@@ -273,21 +258,16 @@ const declineFriendRequest = async (req, res) => {
  * @access  Private
  */
 const removeFriend = async (req, res) => {
+  const currentUserId = req.user.userId;
+  const { userId: friendId } = req.params;
+
+  if (!isValidObjectId(friendId, res)) return;
+
   try {
-    const currentUserId = req.user.userId;
-    const { userId: friendId } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(friendId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid friend ID format." });
-    }
-
     const [currentUser, friend] = await Promise.all([
       User.findById(currentUserId),
       User.findById(friendId),
     ]);
-
     if (!friend || !currentUser) {
       return res
         .status(404)
@@ -301,9 +281,7 @@ const removeFriend = async (req, res) => {
     res.json({ success: true, message: "Friend removed." });
   } catch (error) {
     console.error("Remove Friend Error:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Server Error", error: error.message });
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 

@@ -13,6 +13,7 @@ const weatherRoutes = require("./routes/weatherRoutes");
 const busSystemRoutes = require("./routes/busSystemRoutes");
 const { startSimulation } = require("./controllers/busSystemController");
 const tripPlannerRoutes = require("./routes/tripPlannerRoutes");
+const carpoolRoutes = require("./routes/carpoolRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -196,6 +197,7 @@ console.log("🔗 Setting up API routes...");
 // Mount routes with logging
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/carpooling", carpoolRoutes);
 app.use("/api/admin/notifications", adminNotificationRoutes);
 app.use("/api/notifications", userNotificationRoutes);
 
