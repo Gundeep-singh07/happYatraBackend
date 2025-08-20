@@ -17,7 +17,21 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
       required: [true, "Type is required"],
-      enum: ["info", "warning", "success", "error"],
+      enum: [
+        "info",
+        "warning",
+        "success",
+        "error",
+        "traffic_jam",
+        "rain",
+        "road_block",
+        "accident",
+        "construction",
+        "flood",
+        "snow",
+        "high_wind",
+        "slippery_road",
+      ],
       default: "info",
     },
     isActive: {
@@ -45,6 +59,34 @@ notificationSchema.statics.findActiveNotifications = function () {
   return this.find({ isActive: true }).sort({ createdAt: -1 });
 };
 
+// Static method to find notifications by type
+notificationSchema.statics.findByType = function (type) {
+  return this.find({ type, isActive: true }).sort({ createdAt: -1 });
+};
+
+// Static method to find traffic-related notifications
+notificationSchema.statics.findTrafficNotifications = function () {
+  const trafficTypes = [
+    "traffic_jam",
+    "road_block",
+    "accident",
+    "construction",
+  ];
+  return this.find({
+    type: { $in: trafficTypes },
+    isActive: true,
+  }).sort({ createdAt: -1 });
+};
+
+// Static method to find weather-related notifications
+notificationSchema.statics.findWeatherNotifications = function () {
+  const weatherTypes = ["rain", "flood", "snow", "high_wind", "slippery_road"];
+  return this.find({
+    type: { $in: weatherTypes },
+    isActive: true,
+  }).sort({ createdAt: -1 });
+};
+
 // Instance method to deactivate notification
 notificationSchema.methods.deactivate = function () {
   this.isActive = false;
@@ -55,4 +97,5 @@ const AdminNotification = mongoose.model(
   "AdminNotification",
   notificationSchema
 );
+
 module.exports = AdminNotification;

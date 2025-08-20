@@ -37,13 +37,8 @@ const carpoolRouteSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    // Users who have clicked "Yatra" and are awaiting driver approval
-    yatraRequests: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
+    // -- REMOVED yatraRequests array --
+
     // Approved passengers
     passengers: [
       {

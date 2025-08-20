@@ -14,6 +14,7 @@ const busSystemRoutes = require("./routes/busSystemRoutes");
 const { startSimulation } = require("./controllers/busSystemController");
 const tripPlannerRoutes = require("./routes/tripPlannerRoutes");
 const carpoolRoutes = require("./routes/carpoolRoutes");
+const metroRoutes = require("./routes/metroRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -203,6 +204,8 @@ app.use("/api/notifications", userNotificationRoutes);
 
 // ✅ FIX 1: ADD THIS LINE TO ACTUALLY USE THE WEATHER ROUTE
 app.use("/api/weather", weatherRoutes);
+
+app.use("/api/metro", metroRoutes);
 
 app.use("/api/bus-system", busSystemRoutes);
 app.use("/api/trip-planner", tripPlannerRoutes); // Add this lin
